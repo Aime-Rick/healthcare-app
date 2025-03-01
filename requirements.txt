@@ -1,0 +1,6 @@
+gradio
+SpeechRecognition
+pydub
+googletrans
+gTTS
+ffmpeg
