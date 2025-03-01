@@ -41,8 +41,6 @@ An AI-powered application that transcribes audio recordings, translates the tran
 ```
 ├── README.md
 ├── app.py               # Main application code
-├── audio_chunks/        # Temporary directory for silence-based audio chunks
-├── audio_fixed_chunks/  # Temporary directory for fixed-interval audio chunks
 └── requirements.txt     # List of dependencies
 ```
 
