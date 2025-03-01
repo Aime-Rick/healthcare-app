@@ -5,10 +5,16 @@ from pydub import AudioSegment
 from pydub.silence import split_on_silence
 from googletrans import Translator
 from gtts import gTTS
-
+import shutil
 # Initialize the recognizer and translator
 r = sr.Recognizer()
 translator = Translator()
+
+def cleanup_temp_dirs():
+    for folder in ["audio_chunks", "audio_fixed_chunks"]:
+        if os.path.isdir(folder):
+            shutil.rmtree(folder)
+            print(f"Removed temporary folder: {folder}")
 
 # Function to recognize speech in an audio file (for one audio chunk)
 def transcribe_audio(path, source_lang):
@@ -56,46 +62,51 @@ def get_large_audio_transcription_fixed_interval(path, source_lang, minutes=5):
         whole_text += f"{text.capitalize()}. "
     return whole_text
 
-# Main processing function that returns original and translated text plus audio playback
 async def process_audio(audio_file, source_language, target_language):
     if audio_file is not None:
         path = audio_file
         file_size = os.path.getsize(path)
-        # Choose transcription method based on file size (adjust threshold as needed)
-        if file_size < 50 * 1024 * 1024:
-            transcribed_text = get_large_audio_transcription_on_silence(path, source_language)
-        else:
-            transcribed_text = get_large_audio_transcription_fixed_interval(path, source_language, minutes=1)
-
-        # Translation using googletrans
         try:
-            translated_obj = await translator.translate(transcribed_text, src=source_language, dest=target_language)
-            translated_text = translated_obj.text
-        except Exception as e:
-            translated_text = f"Translation error: {str(e)}"
+            # Choose transcription method based on file size
+            if file_size < 50 * 1024 * 1024:
+                transcribed_text = get_large_audio_transcription_on_silence(path, source_language)
+            else:
+                transcribed_text = get_large_audio_transcription_fixed_interval(path, source_language, minutes=5)
 
-        # Generate audio playback from the translated text using gTTS
-        try:
-            tts = gTTS(translated_text, lang=target_language)
-            playback_path = "translated.mp3"
-            tts.save(playback_path)
-        except Exception as e:
-            playback_path = None
-            translated_text += f"\n(TTS generation error: {str(e)})"
+            # Translation using googletrans
+            try:
+                translated_obj = await translator.translate(transcribed_text, src=source_language, dest=target_language)
+                translated_text = translated_obj.text
+            except Exception as e:
+                translated_text = f"Translation error: {str(e)}"
 
-        return transcribed_text, translated_text, playback_path
+            # Generate audio playback from the translated text using gTTS
+            try:
+                tts = gTTS(translated_text, lang=target_language)
+                playback_path = "translated.mp3"
+                tts.save(playback_path)
+            except Exception as e:
+                playback_path = None
+                translated_text += f"\n(TTS generation error: {str(e)})"
+
+            return transcribed_text, translated_text, playback_path
+        finally:
+            # Clean up temporary files and directories
+            cleanup_temp_dirs()
     return "No audio file provided", "", None
+
+
 
 # Create Gradio interface with dual transcript display and language selection
 def create_interface():
     with gr.Blocks() as demo:
         gr.Markdown("## Healthcare Translation App")
         gr.Markdown(
-            "Upload an audio file to obtain a live transcription (original) and a translation. "
+            "Record an audio to obtain a live transcription (original) and a translation. "
             "Select the source and target languages as needed."
         )
-        with gr.Tab("Audio File Upload"):
-            audio_input = gr.Audio(type="filepath", label="Record Audio File")
+        with gr.Tab("Audio File Recording"):
+            audio_input = gr.Audio(type="filepath", label="Record Audio File", sources=["microphone"])
             source_language = gr.Dropdown(
                 choices=["en", "es", "fr", "de", "it"],
                 value="en",
@@ -121,4 +132,4 @@ def create_interface():
 
 # Launch the app
 demo = create_interface()
-demo.launch(share=True)
+demo.launch()
